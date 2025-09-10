@@ -19,7 +19,7 @@ def fetch_questions():
         import openai
         client = openai.OpenAI(api_key=OPENAI_API_KEY)
         prompt = (
-            "Generate 20 unique Python practice questions for a certification quiz. "
+            "Generate 40 unique Python practice questions for a certification quiz. "
             "For any question involving code output, you MUST run the code in Python 3 before providing the answer. "
             "If the question is about print(len('python')), the answer must be 6. "
             "For questions about Python dictionaries: dictionaries CANNOT contain duplicate keys, and as of Python 3.7+, dictionaries are ordered collections. "
@@ -28,7 +28,7 @@ def fetch_questions():
             "If 'multi' is True, there may be more than one correct answer. "
             "For conceptual questions, ensure the correct answer is unambiguous and phrased as it would appear in Python code or documentation. "
             "For questions with multiple correct answers, ensure 'multi' is True and 'answer' contains all correct indices. "
-            "Return ONLY a valid JSON array of 20 such dictionaries, using double quotes for all keys and string values, no trailing commas, no function, no variable assignment, no explanation."
+            "Return ONLY a valid JSON array of 40 such dictionaries, using double quotes for all keys and string values, no trailing commas, no function, no variable assignment, no explanation."
         )
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -181,6 +181,9 @@ class PythonPracticeApp:
         # --- For question 16, ensure multi-select is enabled if needed ---
         if self.current_question == 15:
             q['multi'] = True
+        # --- Ensure 'multi' key exists ---
+        if 'multi' not in q:
+            q['multi'] = False
         self.question_frame = tk.Frame(self.root)
         self.question_frame.pack(pady=20)
         tk.Label(self.question_frame,
@@ -262,7 +265,7 @@ class PythonPracticeApp:
             new_indices = [i for i, c in enumerate(choices) if is_dict_access(c)]
             if new_indices:
                 q['answer'] = new_indices
-                q['multi'] = True
+                q['multi'] = True  # <-- ensure multi-select is enabled
             return
 
         # Allow both + and .extend() for list concatenation
@@ -276,8 +279,8 @@ class PythonPracticeApp:
                 q['multi'] = True
             return
 
-        # Q4: Accept both # and triple quotes for "comment out multiple lines"
-        if "comment out multiple lines" in q_text:
+        # Q4: Accept both # and triple quotes for "comment multiple lines"
+        if ("comment out multiple lines" in q_text) or ("comment multiple lines" in q_text):
             def is_comment(s):
                 s = str(s).strip()
                 return s.startswith("#") or s.startswith("'''") or s.startswith('"""')
@@ -296,7 +299,7 @@ class PythonPracticeApp:
             return
 
         # Q17: Accept all valid list removal methods
-        if "remove an element from a list" in q_text:
+        if "remove an item from a list" in q_text:
             def is_remove_method(s):
                 s = str(s).replace(" ", "")
                 return (
@@ -308,6 +311,67 @@ class PythonPracticeApp:
             if new_indices:
                 q['answer'] = new_indices
                 q['multi'] = True
+            return
+
+        # Q4: Accept .remove(), .pop(), and del as valid list removal methods
+        if "remove an element from a list" in q_text:
+            def is_remove_method(s):
+                s = str(s).replace(" ", "")
+                return (
+                    ".remove(" in s
+                    or ".pop(" in s
+                    or s.startswith("del")
+                )
+            new_indices = [i for i, c in enumerate(choices) if is_remove_method(c)]
+            if new_indices:
+                q['answer'] = new_indices
+                q['multi'] = True
+            return
+
+        # Q10: Only accept 1 as correct for 7 % 3
+        if "7 % 3" in q_text.replace(" ", ""):
+            new_indices = [i for i, c in enumerate(choices) if str(c).strip() == "1"]
+            if new_indices:
+                q['answer'] = new_indices
+                q['multi'] = False
+            return
+
+        # Q14: Only accept 'HelloWorld' as correct for print('Hello' + 'World')
+        if "output of the code: print('hello' + 'world')" in q_text or "output of the code: print('hello' + 'world')" in q_text.replace(" ", "").lower():
+            new_indices = [i for i, c in enumerate(choices) if str(c).replace(" ", "") == "HelloWorld"]
+            if new_indices:
+                q['answer'] = new_indices
+                q['multi'] = False
+            return
+
+        # Q19: Accept any answer that means "Returns the total number of elements in an iterable"
+        if "len()" in q_text and "python" in q_text:
+            def is_len_meaning(s):
+                s = str(s).lower()
+                return "total number of elements" in s or "number of elements" in s or "length of an iterable" in s
+            new_indices = [i for i, c in enumerate(choices) if is_len_meaning(c)]
+            if new_indices:
+                q['answer'] = new_indices
+                q['multi'] = False
+            return
+
+        # Q24 & Q41: Accept both my_list.pop(3) and del my_list[3] as correct
+        if "remove an item from a list" in q_text and ("my_list.pop(3)" in " ".join(choices) or "del my_list[3]" in " ".join(choices)):
+            def is_remove_method(s):
+                s = str(s).replace(" ", "")
+                return s == "my_list.pop(3)" or s == "delmy_list[3]"
+            new_indices = [i for i, c in enumerate(choices) if is_remove_method(c)]
+            if new_indices:
+                q['answer'] = new_indices
+                q['multi'] = True
+            return
+
+        # Only accept str.lower() as correct for lowercase conversion
+        if "convert a string to lowercase" in q_text and "python" in q_text:
+            new_indices = [i for i, c in enumerate(choices) if str(c).strip() == "str.lower()"]
+            if new_indices:
+                q['answer'] = new_indices
+                q['multi'] = False
             return
 
         # Normalize correct answers
@@ -327,9 +391,15 @@ class PythonPracticeApp:
     def _fix_code_output_answer(self, q):
         import re
         code = q.get('q', '')
-        # Q7: Only accept 'HelloWorld' as correct for print('Hello' + 'World')
+        # Q3: Only accept '3.3333333333333335' as correct for 10 / 3
+        if "10 / 3" in code.replace(" ", ""):
+            q['answer'] = [i for i, c in enumerate(q['choices'])
+                           if str(c).replace(" ", "") in ["3.3333333333333335", "3.333333333333333"]]
+            return
+        # Q13: Only accept 'helloworld' as correct for print('hello' + 'world')
         if "print('hello' + 'world')" in code.replace(" ", "").lower():
-            q['answer'] = [i for i, c in enumerate(q['choices']) if str(c).replace(" ", "") == "HelloWorld"]
+            q['answer'] = [i for i, c in enumerate(q['choices'])
+                           if str(c).replace(" ", "").replace("'", "").lower() == "helloworld"]
             return
         # Q19: Only accept 'helloworld' as correct for print('hello' + 'world')
         if "print('hello' + 'world')" in code.replace(" ", "").lower():
@@ -343,6 +413,21 @@ class PythonPracticeApp:
         if "print('hello'.upper())" in code.replace(" ", "").lower():
             q['answer'] = [i for i, c in enumerate(q['choices']) if str(c).strip() == "HELLO"]
             return
+        # Q3: Only accept 'yth' as correct for 'python'[1:4]
+        if "'python'[1:4]" in code.replace(" ", "").lower():
+            q['answer'] = [i for i, c in enumerate(q['choices']) if str(c).replace(" ", "").replace("'", "") == "yth"]
+            return
+
+        # Q16: Only accept 'python' as correct for print('Python'.lower())
+        if "print('python'.lower())" in code.replace(" ", "").lower():
+            q['answer'] = [i for i, c in enumerate(q['choices']) if str(c).strip() == "python"]
+            return
+
+        # Q18: Only accept "{1:'c', 2:'b'}" as correct for {1:'a', 2:'b', 1:'c'}
+        if "{1:'a', 2:'b', 1:'c'}" in code.replace(" ", ""):
+            q['answer'] = [i for i, c in enumerate(q['choices']) if str(c).replace(" ", "") == "{1:'c',2:'b'}"]
+            return
+
         # Try to match print(expression) including nested parentheses
         code_match = re.search(r"print\((.+)\)", code, re.IGNORECASE)
         multi_match = re.search(
@@ -448,6 +533,38 @@ class PythonPracticeApp:
         except Exception as e:
             print(
                 f"[DEBUG] Could not evaluate code for question: {q.get('q', '')}\nError: {e}")
+        # Try to extract code assignments and variable for "value of x after running x = 5; x += 3"
+        assign_match = re.search(
+            r"value of (\w+) after (?:the code snippet:|running)?\s*([^?]+)", code, re.IGNORECASE)
+        if assign_match:
+            var_name = assign_match.group(1)
+            code_block = assign_match.group(2)
+            # Remove any trailing punctuation
+            code_block = code_block.strip().rstrip('.').rstrip(';')
+            # Split code block on semicolons or newlines
+            lines = []
+            for part in code_block.split(';'):
+                lines.extend([l.strip() for l in part.split('\n') if l.strip()])
+            local_vars = {}
+            allowed_builtins = {'len': len, 'sum': sum, 'min': min, 'max': max, 'abs': abs, 'sorted': sorted, 'str': str,
+                                'int': int, 'float': float, 'bool': bool, 'list': list, 'tuple': tuple, 'set': set, 'dict': dict, 'range': range}
+            try:
+                for line in lines:
+                    exec(line, {"__builtins__": allowed_builtins}, local_vars)
+                result = local_vars.get(var_name)
+                if result is not None:
+                    result_str = str(result)
+                    correct_indices = [i for i, c in enumerate(q['choices']) if str(c).strip() == result_str]
+                    if correct_indices:
+                        q['answer'] = correct_indices if q.get('multi', False) else [correct_indices[0]]
+                    else:
+                        q['choices'].append(result_str)
+                        q['answer'] = [len(q['choices']) - 1]
+                return
+            except Exception as e:
+                print(
+                    f"[DEBUG] Could not evaluate code for question: {q.get('q', '')}\nError: {e}")
+                return
 
     def single_select(self, selected_var):
         for var in self.check_vars:
