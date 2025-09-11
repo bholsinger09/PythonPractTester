@@ -2,6 +2,8 @@ from tkinter import messagebox
 import tkinter as tk
 import threading
 import time
+import random
+from gold_standard.questions import GOLD_STANDARD_QUESTIONS
 print("[DEBUG] PythonCertGUI.py loaded and running!")
 
 
@@ -585,31 +587,31 @@ class PythonPracticeApp:
         if self.question_frame:
             self.question_frame.destroy()
         # Grade
-            correct = 0
-            self.failed_questions = []
-            for idx, (q, user_ans) in enumerate(zip(self.questions, self.user_answers)):
-                if sorted(user_ans) == sorted(q['answer']):
-                    correct += 1
-                else:
-                    self.failed_questions.append((idx, q, user_ans))
-            total = len(self.questions)
-            percent = int((correct / total) * 100)
-            result_text = f"You scored {percent}% ({correct}/{total})"
-            if time_up:
-                result_text = "Time's up!\n" + result_text
-            result_label = tk.Label(
-                self.root, text=result_text, font=('Arial', 16))
-            result_label.pack(pady=20)
-            if self.failed_questions:
-                view_btn = tk.Button(
-                    self.root, text="View Failed Questions", command=self.show_failed_questions)
-                view_btn.pack(pady=10)
+        correct = 0
+        self.failed_questions = []
+        for idx, (q, user_ans) in enumerate(zip(self.questions, self.user_answers)):
+            if sorted(user_ans) == sorted(q['answer']):
+                correct += 1
             else:
-                tk.Label(self.root, text="All questions answered correctly!", font=(
-                    'Arial', 12)).pack(pady=10)
-            quit_btn = tk.Button(self.root, text="Quit",
-                                 command=self.root.quit)
-            quit_btn.pack(pady=10)
+                self.failed_questions.append((idx, q, user_ans))
+        total = len(self.questions)
+        percent = int((correct / total) * 100)
+        result_text = f"You scored {percent}% ({correct}/{total})"
+        if time_up:
+            result_text = "Time's up!\n" + result_text
+        result_label = tk.Label(
+            self.root, text=result_text, font=('Arial', 16))
+        result_label.pack(pady=20)
+        if self.failed_questions:
+            view_btn = tk.Button(
+                self.root, text="View Failed Questions", command=self.show_failed_questions)
+            view_btn.pack(pady=10)
+        else:
+            tk.Label(self.root, text="All questions answered correctly!", font=(
+                'Arial', 12)).pack(pady=10)
+        quit_btn = tk.Button(self.root, text="Quit",
+                             command=self.root.quit)
+        quit_btn.pack(pady=10)
 
     def show_failed_questions(self):
         # Remove previous widgets
